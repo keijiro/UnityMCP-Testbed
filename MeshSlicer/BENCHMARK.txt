@@ -1,0 +1,17 @@
+=== MeshSlicer Comparison Benchmark ===
+Date: 2026-05-12 19:17
+Unity: 6000.3.15f1, Platform: OSXEditor
+
+--- Single-shot slice (one source mesh, one plane, repeat) ---
+ Source tris |   Naive ms |   Burst ms |  Speedup |   Naive GC/slice |   Burst GC/slice
+        4096 |      0.789 |      0.228 |    3.46x |           872 KB |             0 KB
+       16384 |      2.493 |      0.720 |    3.46x |          3036 KB |             0 KB
+       36864 |      5.054 |      1.494 |    3.38x |          6052 KB |             0 KB
+       65536 |      9.045 |      2.659 |    3.40x |         11412 KB |             1 KB
+
+--- Per-frame stress (slice all instances every frame for N frames) ---
+ Source tris | Inst |   Naive ms/frame |   Burst ms/frame |  Speedup |     Burst @ 60fps?
+        4096 |   32 |            27.75 |             7.30 |    3.80x |      yes (<16.6ms)
+        4096 |   64 |            55.62 |            14.72 |    3.78x |      yes (<16.6ms)
+       16384 |   16 |            43.74 |            11.83 |    3.70x |      yes (<16.6ms)
+       16384 |   32 |            89.18 |            23.38 |    3.82x |                 no

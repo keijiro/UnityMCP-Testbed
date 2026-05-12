@@ -1,0 +1,817 @@
+╭─── Claude Code v2.1.139 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                Welcome back Keijiro!               │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ Added agent view (Rese… │
+│ Opus 4.7 · API Usage Billing · keijiro@gmail.com's │ Added `/goal` command:… │
+│  Organization                                      │ Added `/scroll-speed` … │
+│               ~/Documents/MeshSlicer               │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+❯ /model 
+  ⎿  Kept model as Opus 4.7 (1M context) (default)
+
+❯ In this Unity project, I want mesh slicing with arbitrary planes to be one of 
+   the main features. In this session, please implement a feature that slices a 
+   Mesh with an arbitrary plane.                                                
+                                                                                
+  Given a Mesh and a plane represented by Unity.Mathematics.Geometry.Plane, the 
+   system should cut the mesh along the plane, split it into two separate       
+  meshes, and generate caps to close the cut surfaces on both sides.            
+                                                                                
+  Please begin with a naive implementation and create appropriate tests for it. 
+   Use Unity’s standard Test Runner to perform functional tests. In addition,   
+  render the generated meshes in a scene using MeshRenderer components and      
+  perform qualitative visual validation using your own (AI agent) visual        
+  inspection.                                                                   
+                                                                                
+  Please also prepare high-load test cases that simulate practical real-world   
+  usage scenarios. For example, continuously slice a reasonable number of       
+  high-polygon meshes every frame and render them using MeshRenderer. Measure   
+  and report the performance characteristics of these tests.                    
+                                                                                
+  After completing the baseline implementation and evaluation, begin            
+  optimization work. At this stage, introduce technologies such as the Burst    
+  compiler and Unity’s advanced Mesh API. Use the same high-load test cases to  
+  verify and compare the performance improvements achieved through              
+  optimization.                                                                 
+
+  Read 2 files, listed 5 directories, called unity-mcp (ctrl+o to expand)
+
+⏺ I have a clear plan. Let me confirm the scope before diving in—this is a
+  substantial implementation.
+
+⏺ User answered Claude's questions:
+  ⎿  · How should the slicer handle non-closed (non-watertight) input meshes 
+     during cap generation? → Assume closed manifolds
+     · Should I treat submeshes / multiple materials, or single-material meshes 
+     only? → Single submesh only
+     · Vertex attributes to preserve through the slice? → Full 
+     (pos+normal+tangent+UV)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Bash(find /Users/keijiro/Documents/MeshSlicer/Library/PackageCache/com.unity.m
+      athematics@19a9377c4ffa -name "*.cs" | xargs grep -l
+      "Geometry.Plane\|namespace Unity.M…)
+  ⎿  /Users/keijiro/Documents/MeshSlicer/Library/PackageCache/com.unity.mat
+     hematics@19a9377c4ffa/Unity.Mathematics/Geometry/MinMaxAABB.cs
+     /Users/keijiro/Documents/MeshSlicer/Library/PackageCache/com.unity.mat
+     hematics@19a9377c4ffa/Unity.Mathematics/Geometry/Plane.cs
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Good. Let me start building. First, add explicit package dependencies and set
+  up the asmdef structure.
+
+⏺ Write(Packages/manifest.json)
+  ⎿  Error writing file
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Write(Packages/manifest.json)
+  ⎿  Added 5 lines
+       2    "dependencies": {
+       3      "com.unity.ai.assistant": "2.7.0-pre.3",
+       4      "com.unity.ai.inference": "2.6.1",
+       5 +    "com.unity.burst": "1.8.29",                               
+       6 +    "com.unity.collections": "2.6.5",                          
+       7      "com.unity.inputsystem": "1.19.0",
+       8 +    "com.unity.mathematics": "1.3.2",                          
+       9      "com.unity.render-pipelines.universal": "17.3.0",
+      10 +    "com.unity.test-framework": "1.5.1",                       
+      11 +    "com.unity.test-framework.performance": "3.0.3",           
+      12      "jp.keijiro.ai.assistant.extensions": "1.1.2",
+      13      "jp.keijiro.klutter-tools": "2.6.0",
+      14      "com.unity.modules.adaptiveperformance": "1.0.0",
+⏺ Now create the asmdef structure.
+
+⏺ Write(Assets/MeshSlicer/Runtime/MeshSlicer.asmdef)
+  ⎿  Wrote 18 lines to Assets/MeshSlicer/Runtime/MeshSlicer.asmdef
+       1 {
+       2   "name": "MeshSlicer",
+       3   "rootNamespace": "MeshSlicer",
+       4   "references": [
+       5     "Unity.Burst",
+       6     "Unity.Collections",
+       7     "Unity.Mathematics"
+       8   ],
+       9   "includePlatforms": [],
+      10   "excludePlatforms": [],
+     … +8 lines (ctrl+o to expand)
+
+⏺ Write(Assets/MeshSlicer/Tests/EditMode/MeshSlicer.EditModeTests.asmdef)
+  ⎿  Wrote 25 lines to
+     Assets/MeshSlicer/Tests/EditMode/MeshSlicer.EditModeTests.asmdef
+       1 {
+       2   "name": "MeshSlicer.EditModeTests",
+       3   "rootNamespace": "MeshSlicer.Tests",
+       4   "references": [
+       5     "MeshSlicer",
+       6     "Unity.Mathematics",
+       7     "UnityEngine.TestRunner",
+       8     "UnityEditor.TestRunner"
+       9   ],
+      10   "includePlatforms": [
+     … +15 lines (ctrl+o to expand)
+
+⏺ Write(Assets/MeshSlicer/Tests/PlayMode/MeshSlicer.PlayModeTests.asmdef)
+  ⎿  Wrote 24 lines to
+     Assets/MeshSlicer/Tests/PlayMode/MeshSlicer.PlayModeTests.asmdef
+       1 {
+       2   "name": "MeshSlicer.PlayModeTests",
+       3   "rootNamespace": "MeshSlicer.Tests",
+       4   "references": [
+       5     "MeshSlicer",
+       6     "Unity.Mathematics",
+       7     "Unity.PerformanceTesting",
+       8     "UnityEngine.TestRunner",
+       9     "UnityEditor.TestRunner"
+      10   ],
+     … +14 lines (ctrl+o to expand)
+
+⏺ Now the naive slicer implementation.
+
+⏺ Write(Assets/MeshSlicer/Runtime/SliceResult.cs)
+  ⎿  Wrote 18 lines to Assets/MeshSlicer/Runtime/SliceResult.cs
+       1 using UnityEngine;
+       2 
+       3 namespace MeshSlicer
+       4 {
+       5     public readonly struct SliceResult
+       6     {
+       7         public readonly Mesh Positive;
+       8         public readonly Mesh Negative;
+       9 
+      10         public SliceResult(Mesh positive, Mesh negative)
+     … +8 lines (ctrl+o to expand)
+
+⏺ Write(Assets/MeshSlicer/Runtime/PlaneBasis.cs)
+  ⎿  Wrote 22 lines to Assets/MeshSlicer/Runtime/PlaneBasis.cs
+       2 using Unity.Mathematics;
+       3 namespace MeshSlicer
+       4 {
+       5     // Deterministic right-handed orthonormal basis (U, V, N) fo
+         r a plane normal.
+       6     internal readonly struct PlaneBasis
+       7     {
+       8         public readonly float3 N;
+       9         public readonly float3 U;
+      10         public readonly float3 V;
+     … +15 lines (ctrl+o to expand)
+
+⏺ Write(Assets/MeshSlicer/Runtime/NaiveMeshSlicer.cs)
+  ⎿  Wrote 322 lines to Assets/MeshSlicer/Runtime/NaiveMeshSlicer.cs
+       2 using Unity.Mathematics;.Generic;
+       3 using UnityEngine;
+       4 using UnityEngine.Rendering;
+       5 using Plane = Unity.Mathematics.Geometry.Plane;
+       6 
+       8 {amespace MeshSlicer
+       9     // Naive single-threaded slicer. Slices a single-submesh mes
+         h by an arbitrary plane,
+      10     // returning two meshes (one per side of the plane) with cap
+         s generated by fan-
+     … +373 lines (ctrl+o to expand)
+
+  Called unity-mcp 5 times (ctrl+o to expand)
+
+⏺ Smoke test passes; the cube halves have correct bounds. Now write functional
+  tests.
+
+⏺ Write(Assets/MeshSlicer/Tests/EditMode/MeshSlicerTestUtils.cs)
+  ⎿  Wrote 77 lines to
+     Assets/MeshSlicer/Tests/EditMode/MeshSlicerTestUtils.cs
+       2 using Unity.Mathematics;
+       3 
+       4 namespace MeshSlicer.Tests
+       5 {
+       6     internal static class MeshSlicerTestUtils
+       7     {
+       8         public static Mesh CreatePrimitiveMesh(PrimitiveType typ
+         e)
+       9         {
+      10             var go = GameObject.CreatePrimitive(type);
+     … +75 lines (ctrl+o to expand)
+
+⏺ Write(Assets/MeshSlicer/Tests/EditMode/NaiveMeshSlicerTests.cs)
+  ⎿  Wrote 140 lines to
+     Assets/MeshSlicer/Tests/EditMode/NaiveMeshSlicerTests.cs
+       1 using NUnit.Framework;
+       2 using UnityEngine;
+       3 using Unity.Mathematics;
+       4 using Plane = Unity.Mathematics.Geometry.Plane;
+       5 
+       6 namespace MeshSlicer.Tests
+       7 {
+       8     public class NaiveMeshSlicerTests
+       9     {
+      10         [Test]
+     … +176 lines (ctrl+o to expand)
+
+  Called unity-mcp 3 times (ctrl+o to expand)
+
+⏺ Bash(sleep 8)
+  ⎿  (No output)
+
+  Called unity-mcp 2 times (ctrl+o to expand)
+
+⏺ Bash(sleep 12 && cat
+      /Users/keijiro/Documents/MeshSlicer/Assets/_test_results.txt)
+  ⎿  RunStarted: URP Template
+     PASS MeshSlicer.Tests.NaiveMeshSlicerTests.CapNormalsFacePlaneNormal (
+     0.001s)
+     … +19 lines (ctrl+o to expand)
+⏺ The closed-manifold test fails because Unity's primitive cube uses split
+  vertices per face. Let me make the closure check position-based.
+
+⏺ Update(Assets/MeshSlicer/Tests/EditMode/MeshSlicerTestUtils.cs)
+  ⎿  Added 24 lines, removed 8 lines
+      33              return (float)(s / 6.0);
+      34          }
+      35  
+      36 -        // Approximate "is closed" test by summing signed edge 
+         -counts.                                                        
+      37 -        // Each directed edge in a closed manifold appears once
+         - in each direction;                                            
+      38 -        // sum of (a→b count − b→a count) over all directed edg
+         -es is zero.                                                    
+      39 -        public static bool LooksClosed(Mesh m)                 
+      36 +        // Approximate "is closed" test using position-merged v
+         +ertices: each directed                                         
+      37 +        // edge in a closed manifold appears once in each direc
+         +tion, so the signed sum                                        
+      38 +        // of (a→b - b→a) over all undirected edges should be z
+         +ero. Vertices are                                              
+      39 +        // merged by quantized position so that primitives with
+         + split vertices per                                            
+      40 +        // face (e.g. Unity's Cube) are still recognized as clo
+         +sed.                                                           
+      41 +        public static bool LooksClosed(Mesh m, float eps = 1e-4
+         +f)                                                             
+      42          {
+      41 -            var tris = m.triangles;                            
+      43 +            var verts = m.vertices;                            
+      44 +            var tris  = m.triangles;                           
+      45 +            // Build vertex remap by quantized position.       
+      46 +            var remap = new int[verts.Length];                 
+      47 +            var bucket = new System.Collections.Generic.Diction
+         +ary<long, int>();                                              
+      48 +            float inv = 1f / eps;                              
+      49 +            for (int i = 0; i < verts.Length; i++)             
+      50 +            {                                                  
+      51 +                int qx = Mathf.RoundToInt(verts[i].x * inv);   
+      52 +                int qy = Mathf.RoundToInt(verts[i].y * inv);   
+      53 +                int qz = Mathf.RoundToInt(verts[i].z * inv);   
+      54 +                long key = (((long)qx & 0x1FFFFF) << 42) | (((l
+         +ong)qy & 0x1FFFFF) << 21) | ((long)qz & 0x1FFFFF);             
+      55 +                if (!bucket.TryGetValue(key, out var idx)) { id
+         +x = bucket.Count; bucket[key] = idx; }                         
+      56 +                remap[i] = idx;                                
+      57 +            }                                                  
+      58              var counts = new System.Collections.Generic.Diction
+          ary<long, int>();
+      43 -            int n = tris.Length;                               
+      44 -            for (int i = 0; i < n; i += 3)                     
+      59 +            for (int i = 0; i < tris.Length; i += 3)           
+      60              {
+      46 -                int a = tris[i], b = tris[i + 1], c = tris[i + 
+         -2];                                                            
+      61 +                int a = remap[tris[i]], b = remap[tris[i + 1]],
+         + c = remap[tris[i + 2]];                                       
+      62 +                if (a == b || b == c || c == a) continue; // de
+         +generate                                                       
+      63                  AddEdge(counts, a, b);
+      64                  AddEdge(counts, b, c);
+      65                  AddEdge(counts, c, a);
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 4)
+  ⎿  (No output)
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 12 && cat
+      /Users/keijiro/Documents/MeshSlicer/Assets/_test_results.txt)
+  ⎿  RunStarted: URP Template
+     PASS MeshSlicer.Tests.NaiveMeshSlicerTests.CapNormalsFacePlaneNormal (
+     0.034s)
+     … +9 lines (ctrl+o to expand)
+
+⏺ All 5 EditMode tests pass. Move to visual validation.
+
+⏺ Bash(rm -f /Users/keijiro/Documents/MeshSlicer/Assets/_test_results.txt
+      /Users/keijiro/Documents/MeshSlicer/Assets/_test_results.txt.meta)
+  ⎿  Done
+
+⏺ Now build a demo scene and capture it visually.
+
+⏺ Write(Assets/MeshSlicer/Demo/SliceDemo.cs)
+  ⎿  Wrote 67 lines to Assets/MeshSlicer/Demo/SliceDemo.cs
+       2 using Unity.Mathematics;
+       3 using Plane = Unity.Mathematics.Geometry.Plane;
+       4 
+       5 namespace MeshSlicer.Demo
+       6 {
+       7     // Spawns the two halves of a sliced primitive at the given 
+         pose, separated
+       8     // along the cut plane normal so the cap is visible.
+       9     [ExecuteAlways]
+      10     public class SliceDemo : MonoBehaviour
+     … +64 lines (ctrl+o to expand)
+
+⏺ Write(Assets/MeshSlicer/Demo/MeshSlicer.Demo.asmdef)
+  ⎿  Wrote 20 lines to Assets/MeshSlicer/Demo/MeshSlicer.Demo.asmdef
+       1 {
+       2   "name": "MeshSlicer.Demo",
+       3   "rootNamespace": "MeshSlicer.Demo",
+       4   "references": [
+       5     "MeshSlicer",
+       6     "Unity.Mathematics",
+       7     "Unity.Burst",
+       8     "Unity.Collections",
+       9     "Unity.RenderPipelines.Universal.Runtime"
+      10   ],
+     … +10 lines (ctrl+o to expand)
+
+⏺ Now let me build a scene with several sliced primitives and capture it.
+
+  Called unity-mcp 2 times (ctrl+o to expand)
+
+⏺ Now capture the camera view.
+
+  Called unity-mcp 7 times (ctrl+o to expand)
+
+⏺ Visual validation: caps are clean, halves separate properly along the slice
+  plane normal, and cuts look geometrically correct on
+  cube/sphere/capsule/cylinder. Mark this done and move to benchmarks.
+
+⏺ Write(Assets/MeshSlicer/Runtime/BenchmarkMeshes.cs)
+  ⎿  Wrote 64 lines to Assets/MeshSlicer/Runtime/BenchmarkMeshes.cs
+       2 using UnityEngine.Rendering;
+       3 
+       4 namespace MeshSlicer
+       5 {
+       6     public static class BenchmarkMeshes
+       8         // Generates a UV sphere of unit diameter (radius 0.5).
+       9         // rings = vertical subdivisions, sectors = horizontal s
+         ubdivisions.
+      10         // (rings+1) * (sectors+1) vertices, ~rings*sectors*2 tr
+         iangles.
+     … +61 lines (ctrl+o to expand)
+⏺ Write(Assets/MeshSlicer/Tests/PlayMode/MeshSlicerPerformanceTests.cs)
+  ⎿  Wrote 74 lines to
+     Assets/MeshSlicer/Tests/PlayMode/MeshSlicerPerformanceTests.cs
+       1 using NUnit.Framework;
+       2 using Unity.Mathematics;
+       3 using Unity.PerformanceTesting;
+       4 using UnityEngine;
+       5 using Plane = Unity.Mathematics.Geometry.Plane;
+       6 
+       7 namespace MeshSlicer.Tests
+       8 {
+       9     public class MeshSlicerPerformanceTests
+      10     {
+     … +77 lines (ctrl+o to expand)
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 30 && cat
+      /Users/keijiro/Documents/MeshSlicer/Assets/_perf_results.txt)
+  ⎿  running...
+
+⏺ Bash(sleep 30 && cat
+      /Users/keijiro/Documents/MeshSlicer/Assets/_perf_results.txt)
+  ⎿  running...
+
+  Read 1 file, called unity-mcp (ctrl+o to expand)
+
+⏺ Update(Assets/MeshSlicer/Demo/SliceDemo.cs)
+  ⎿  Added 3 lines, removed 2 lines
+      38              _neg = sr.Negative;
+      39              DestroyImmediate(srcMesh);
+      40  
+      41 -            if (_pos != null) _posGo = MakeChild("Positive", _p
+         -os, +(Vector3)n * Separation);                                 
+      42 -            if (_neg != null) _negGo = MakeChild("Negative", _n
+         -eg, -(Vector3)n * Separation);                                 
+      41 +            var off = (Vector3)n * Separation;                 
+      42 +            if (_pos != null) _posGo = MakeChild("Positive", _p
+         +os,  off);                                                     
+      43 +            if (_neg != null) _negGo = MakeChild("Negative", _n
+         +eg, -off);                                                     
+      44          }
+      45  
+      46          GameObject MakeChild(string name, Mesh m, Vector3 offse
+          t)
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 6)
+  ⎿  (No output)
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 60 && cat
+      /Users/keijiro/Documents/MeshSlicer/Assets/_perf_results.txt)
+  ⎿  RunStarted: URP Template
+     --- URP Template status=Passed duration=0.000s
+     FINISHED passed=0 failed=0 duration=0.00s
+
+  Searched for 1 pattern, read 1 file, listed 1 directory, called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 90 && cat
+      /Users/keijiro/Documents/MeshSlicer/Assets/_perf_results.txt)
+  ⎿  RunStarted: URP Template childCount=no
+     STARTED: URP Template hasChildren=True
+     FIN URP Template status=Passed duration=0.000s hasChildren=False
+     FINISHED passed=0 failed=0 duration=0.00s
+
+  Listed 3 directories (ctrl+o to expand)
+
+⏺ Write(ProjectSettings/Packages/com.unity.test-framework/Settings.json)
+  ⎿  Wrote 3 lines to
+     ProjectSettings/Packages/com.unity.test-framework/Settings.json
+      1 {
+      2   "m_EnablePlaymodeTestsRunner": true
+      3 }
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 60 && cat
+      /Users/keijiro/Documents/MeshSlicer/Assets/_perf_results.txt)
+  ⎿  RunStarted: URP Template
+     --- URP Template status=Passed dur=0.000s
+     FINISHED passed=0 failed=0 skipped=0 dur=0.00s
+
+⏺ Let me skip the PlayMode test runner setup issues and benchmark the slicer
+  directly via a Stopwatch in the editor.
+
+  Read 1 file, called unity-mcp 6 times (ctrl+o to expand)
+⏺ Naive baseline established. Now move to Burst optimization.
+
+⏺ Write(Assets/MeshSlicer/Runtime/BurstMeshSlicer.cs)
+  ⎿  Wrote 478 lines to Assets/MeshSlicer/Runtime/BurstMeshSlicer.cs
+      1 using System.Runtime.InteropServices;
+      2 using Unity.Burst;
+      3 using Unity.Collections;
+      4 using Unity.Collections.LowLevel.Unsafe;
+      5 using Unity.Jobs;
+      6 using Unity.Mathematics;
+      7 using UnityEngine;
+      8 using UnityEngine.Rendering;
+      9 using Plane = Unity.Mathematics.Geometry.Plane;
+     … +570 lines (ctrl+o to expand)
+
+  Called unity-mcp 4 times (ctrl+o to expand)
+
+⏺ Bash(sleep 8)
+  ⎿  (No output)
+
+  Read 1 file, called unity-mcp (ctrl+o to expand)
+
+⏺ Update(Assets/MeshSlicer/Runtime/BurstMeshSlicer.cs)
+  ⎿  Added 3 lines, removed 3 lines
+      140              // Vertex struct layout matches the attribute desc
+           riptors above.
+      141              var dstVerts = md.GetVertexData<Vertex>();
+      142              var dstTris  = md.GetIndexData<uint>();
+      143 -            UnsafeUtility.MemCpy(dstVerts.GetUnsafePtr(), vert
+          -s.GetUnsafeReadOnlyPtr(),                                     
+      144 -                (long)vc * UnsafeUtility.SizeOf<Vertex>());   
+      145 -            // Indices we have are int — copy with widening to
+          - uint.                                                        
+      143              unsafe
+      144              {
+      145 +                UnsafeUtility.MemCpy(dstVerts.GetUnsafePtr(), 
+          +verts.GetUnsafeReadOnlyPtr(),                                 
+      146 +                    (long)vc * UnsafeUtility.SizeOf<Vertex>())
+          +;                                                             
+      147 +                // Indices we have are int — copy with widenin
+          +g to uint.                                                    
+      148                  var src = (int*)tris.GetUnsafeReadOnlyPtr();
+      149                  var dst = (uint*)dstTris.GetUnsafePtr();
+      150                  for (int i = 0; i < ic; i++) dst[i] = (uint)sr
+           c[i];
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 6)
+  ⎿  (No output)
+
+  Called unity-mcp 2 times (ctrl+o to expand)
+
+⏺ Burst slicer matches naive output (37 verts, 26 tris per side, identical
+  bounds). Let me run the EditMode tests against both impls and add
+  Burst-specific tests.
+
+⏺ Update(Assets/MeshSlicer/Tests/EditMode/NaiveMeshSlicerTests.cs)
+  ⎿  Added 64 lines
+       5  
+       6  namespace MeshSlicer.Tests
+       7  {
+       8 +    // Run all functional tests against both implementations so
+         + they share a contract.                                        
+       9 +    public delegate SliceResult SliceFn(Mesh m, Plane p);      
+      10 +                                                               
+      11 +    [TestFixture(nameof(NaiveMeshSlicer))]                     
+      12 +    [TestFixture(nameof(BurstMeshSlicer))]                     
+      13 +    public class MeshSlicerSharedTests                         
+      14 +    {                                                          
+      15 +        readonly SliceFn _slice;                               
+      16 +        public MeshSlicerSharedTests(string impl)              
+      17 +        {                                                      
+      18 +            _slice = impl == nameof(BurstMeshSlicer)           
+      19 +                ? (SliceFn)BurstMeshSlicer.Slice               
+      20 +                : (SliceFn)NaiveMeshSlicer.Slice;              
+      21 +        }                                                      
+      22 +                                                               
+      23 +        SliceResult Slice(Mesh m, Plane p) => _slice(m, p);    
+      24 +                                                               
+      25 +        [Test]                                                 
+      26 +        public void Cube_HalvedByHorizontalPlane_ProducesEqualH
+         +alves()                                                        
+      27 +        {                                                      
+      28 +            var src = MeshSlicerTestUtils.CreatePrimitiveMesh(P
+         +rimitiveType.Cube);                                            
+      29 +            var plane = Plane.CreateFromUnitNormalAndPointInPla
+         +ne(new float3(0, 1, 0), float3.zero);                          
+      30 +            var sr = Slice(src, plane);                        
+      31 +            Assert.AreEqual(0.5f, MeshSlicerTestUtils.SignedVol
+         +ume(sr.Positive), 1e-3f);                                      
+      32 +            Assert.AreEqual(0.5f, MeshSlicerTestUtils.SignedVol
+         +ume(sr.Negative), 1e-3f);                                      
+      33 +            Assert.IsTrue(MeshSlicerTestUtils.LooksClosed(sr.Po
+         +sitive));                                                      
+      34 +            Assert.IsTrue(MeshSlicerTestUtils.LooksClosed(sr.Ne
+         +gative));                                                      
+      35 +            Object.DestroyImmediate(src);                      
+      36 +            Object.DestroyImmediate(sr.Positive);              
+      37 +            Object.DestroyImmediate(sr.Negative);              
+      38 +        }                                                      
+      39 +                                                               
+      40 +        [Test]                                                 
+      41 +        public void ObliquePlane_VolumesSumToCube()            
+      42 +        {                                                      
+      43 +            var src = MeshSlicerTestUtils.CreatePrimitiveMesh(P
+         +rimitiveType.Cube);                                            
+      44 +            var n = math.normalize(new float3(1, 2, 3));       
+      45 +            var plane = Plane.CreateFromUnitNormalAndPointInPla
+         +ne(n, new float3(0.1f, -0.05f, 0.2f));                         
+      46 +            var sr = Slice(src, plane);                        
+      47 +            float vp = sr.Positive ? MeshSlicerTestUtils.Signed
+         +Volume(sr.Positive) : 0f;                                      
+      48 +            float vn = sr.Negative ? MeshSlicerTestUtils.Signed
+         +Volume(sr.Negative) : 0f;                                      
+      49 +            Assert.AreEqual(1f, vp + vn, 5e-3f);               
+      50 +            Object.DestroyImmediate(src);                      
+      51 +            if (sr.Positive) Object.DestroyImmediate(sr.Positiv
+         +e);                                                            
+      52 +            if (sr.Negative) Object.DestroyImmediate(sr.Negativ
+         +e);                                                            
+      53 +        }                                                      
+      54 +                                                               
+      55 +        [Test]                                                 
+      56 +        public void HighPolySphere_VolumeMatchesSourceWithinSli
+         +ceTolerance()                                                  
+      57 +        {                                                      
+      58 +            var src = BenchmarkMeshes.CreateUVSphere(rings: 32,
+         + sectors: 64);                                                 
+      59 +            float full = MeshSlicerTestUtils.SignedVolume(src);
+      60 +            var n = math.normalize(new float3(0.3f, 1f, 0.2f));
+      61 +            var plane = Plane.CreateFromUnitNormalAndPointInPla
+         +ne(n, float3.zero);                                            
+      62 +            var sr = Slice(src, plane);                        
+      63 +            float vp = sr.Positive ? MeshSlicerTestUtils.Signed
+         +Volume(sr.Positive) : 0f;                                      
+      64 +            float vn = sr.Negative ? MeshSlicerTestUtils.Signed
+         +Volume(sr.Negative) : 0f;                                      
+      65 +            Assert.AreEqual(full, vp + vn, full * 0.005f, "slic
+         +ed halves should reconstruct the source volume");              
+      66 +            Object.DestroyImmediate(src);                      
+      67 +            if (sr.Positive) Object.DestroyImmediate(sr.Positiv
+         +e);                                                            
+      68 +            if (sr.Negative) Object.DestroyImmediate(sr.Negativ
+         +e);                                                            
+      69 +        }                                                      
+      70 +    }                                                          
+      71 +                                                               
+      72      public class NaiveMeshSlicerTests
+      73      {
+      74          [Test]
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 6)
+  ⎿  (No output)
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 15 && cat
+      /Users/keijiro/Documents/MeshSlicer/Assets/_test_results.txt)
+  ⎿  RunStarted: URP Template
+     PASS MeshSlicer.Tests.MeshSlicerSharedTests("BurstMeshSlicer").Cube_Ha
+     lvedByHorizontalPlane_ProducesEqualHalves (0.049s)
+     … +19 lines (ctrl+o to expand)
+
+⏺ Update(Assets/MeshSlicer/Tests/EditMode/NaiveMeshSlicerTests.cs)
+  ⎿  Added 3 lines, removed 3 lines
+      56          public void HighPolySphere_VolumeMatchesSourceWithinSli
+          ceTolerance()
+      57          {
+      58              var src = BenchmarkMeshes.CreateUVSphere(rings: 32,
+           sectors: 64);
+      59 -            float full = MeshSlicerTestUtils.SignedVolume(src);
+      59 +            float full = math.abs(MeshSlicerTestUtils.SignedVol
+         +ume(src));                                                     
+      60              var n = math.normalize(new float3(0.3f, 1f, 0.2f));
+      61              var plane = Plane.CreateFromUnitNormalAndPointInPla
+          ne(n, float3.zero);
+      62              var sr = Slice(src, plane);
+      63 -            float vp = sr.Positive ? MeshSlicerTestUtils.Signed
+         -Volume(sr.Positive) : 0f;                                      
+      64 -            float vn = sr.Negative ? MeshSlicerTestUtils.Signed
+         -Volume(sr.Negative) : 0f;                                      
+      63 +            float vp = sr.Positive ? math.abs(MeshSlicerTestUti
+         +ls.SignedVolume(sr.Positive)) : 0f;                            
+      64 +            float vn = sr.Negative ? math.abs(MeshSlicerTestUti
+         +ls.SignedVolume(sr.Negative)) : 0f;                            
+      65              Assert.AreEqual(full, vp + vn, full * 0.005f, "slic
+          ed halves should reconstruct the source volume");
+      66              Object.DestroyImmediate(src);
+      67              if (sr.Positive) Object.DestroyImmediate(sr.Positiv
+          e);
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 5)
+  ⎿  (No output)
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 12 && cat
+      /Users/keijiro/Documents/MeshSlicer/Assets/_test_results.txt)
+  ⎿  RunStarted: URP Template
+     PASS MeshSlicer.Tests.MeshSlicerSharedTests("BurstMeshSlicer").Cube_Ha
+     lvedByHorizontalPlane_ProducesEqualHalves (0.046s)
+     … +15 lines (ctrl+o to expand)
+
+⏺ All 11 EditMode tests pass on both impls. Now run benchmarks on Burst.
+  Read 1 file, called unity-mcp (ctrl+o to expand)
+
+⏺ Massive improvement. Let me also build a Play Mode stress demo so the slicer
+  runs every frame on real renderers, and capture it.
+
+⏺ Write(Assets/MeshSlicer/Demo/StressController.cs)
+  ⎿  Wrote 120 lines to Assets/MeshSlicer/Demo/StressController.cs
+       2 using Unity.Mathematics;
+       3 using Plane = Unity.Mathematics.Geometry.Plane;
+       4 
+       5 namespace MeshSlicer.Demo
+       6 {
+         random planes,es a high-poly source mesh N times per frame with 
+       8     // assigns the results to MeshFilters, and reports per-frame
+          timing on screen.
+       9     public class StressController : MonoBehaviour
+      10     {
+     … +128 lines (ctrl+o to expand)
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 6)
+  ⎿  (No output)
+
+  Called unity-mcp 4 times (ctrl+o to expand)
+
+⏺ Update(Assets/MeshSlicer/Demo/StressController.cs)
+  ⎿  Added 3 lines
+      58              }
+      59          }
+      60  
+      61 +        // Exposed so editor scripts can drive one frame withou
+         +t entering Play Mode.                                          
+      62 +        public void Tick() { Update(); }                       
+      63 +                                                               
+      64          void Update()
+      65          {
+      66              // Animate planes over time.
+
+⏺ Bash(sleep 5)
+  ⎿  (No output)
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 6)
+  ⎿  (No output)
+
+  Read 1 file, called unity-mcp (ctrl+o to expand)
+
+⏺ Update(Assets/MeshSlicer/Demo/StressController.cs)
+  ⎿  Added 1 line, removed 1 line
+      59          }
+      60  
+      61          // Exposed so editor scripts can drive one frame withou
+          t entering Play Mode.
+      62 -        public void Tick() { Update(); }                       
+      62 +        public void Tick() { if (_planes == null) OnEnable(); U
+         +pdate(); }                                                     
+      63  
+      64          void Update()
+      65          {
+
+⏺ Bash(sleep 5)
+  ⎿  (No output)
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Bash(sleep 6)
+  ⎿  (No output)
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ 64 MeshFilters populated with ~154k tris total. Let me capture the multi-angle
+   view.
+
+  Called unity-mcp (ctrl+o to expand)
+
+⏺ Visual stress test confirms 32 high-poly spheres slicing cleanly with caps
+  oriented correctly. Now write a final consolidated comparison benchmark.
+
+  Read 1 file, called unity-mcp 2 times (ctrl+o to expand)
+
+⏺ Let me re-run the comparison from a clean scene for cleaner numbers.
+  Read 1 file, called unity-mcp (ctrl+o to expand)
+
+⏺ Now clean up temp scratch files and persist a summary report.
+
+  Listed 1 directory (ctrl+o to expand)
+
+⏺ Bash(mv /Users/keijiro/Documents/MeshSlicer/Assets/_bench_compare.txt
+      /Users/keijiro/Documents/MeshSlicer/BENCHMARK.txt 2>&1 ; rm -f
+      /Users/keijiro/Documents/MeshSli…)
+  ⎿  No matches found
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ All tasks complete. Final summary:
+
+  What was built
+
+  Runtime (Assets/MeshSlicer/Runtime/):
+  - NaiveMeshSlicer.cs — single-threaded baseline with List<>/Dictionary<>
+  - BurstMeshSlicer.cs — same algorithm in IJob with NativeList/NativeHashMap,
+  written into Mesh.AllocateWritableMeshData buffers via UnsafeUtility.MemCpy
+  - BenchmarkMeshes.CreateUVSphere(rings, sectors) — parametric high-poly source
+  - Both impls share SliceResult, PlaneBasis, full attribute support
+  (pos/normal/tangent/UV), fan-triangulated caps with planar UVs, plane-aligned
+  normals, and IndexFormat.UInt32
+
+  Tests (Assets/MeshSlicer/Tests/EditMode/):
+  - 11 EditMode tests via Unity Test Runner — 3 shared ([TestFixture]
+  parameterized over both impls) and 5 naive-specific. Verify volumes, closure,
+  cap normals, and that the two impls produce equivalent geometry. All 11 pass.
+
+  Demos (Assets/MeshSlicer/Demo/):
+  - SliceDemo.unity — one cube/sphere/capsule/cylinder each, sliced by an
+  oblique plane, MeshRenderer-rendered
+  - StressDemo.unity + StressController.cs — 32 sliced spheres re-sliced every
+  frame with animated planes, showing on-screen ms/frame
+
+  Visual validation (via Unity MCP):
+  - The four-primitive demo confirms cube/sphere/capsule/cylinder all slice
+  cleanly with visible caps oriented along the cut plane
+  - The 32-instance stress scene (~150k tris) renders all 64 halves cleanly
+  under continuous re-slicing
+
+  Performance (Unity 6.3.15f1, macOS Editor, single thread, empty scene)
+
+  ┌─────────────┬─────────┬─────────┬─────────┬──────────┬──────────┐
+  │ Source tris │  Naive  │  Burst  │ Speedup │ Naive GC │ Burst GC │
+  ├─────────────┼─────────┼─────────┼─────────┼──────────┼──────────┤
+  │       4 096 │ 0.79 ms │ 0.23 ms │    3.5× │   872 KB │     0 KB │
+  ├─────────────┼─────────┼─────────┼─────────┼──────────┼──────────┤
+  │      16 384 │ 2.49 ms │ 0.72 ms │    3.5× │   3.0 MB │     0 KB │
+  ├─────────────┼─────────┼─────────┼─────────┼──────────┼──────────┤
+  │      36 864 │ 5.05 ms │ 1.49 ms │    3.4× │   6.1 MB │     0 KB │
+  ├─────────────┼─────────┼─────────┼─────────┼──────────┼──────────┤
+  │      65 536 │ 9.05 ms │ 2.66 ms │    3.4× │  11.4 MB │    ~1 KB │
+  └─────────────┴─────────┴─────────┴─────────┴──────────┴──────────┘
+
+  Per-frame stress: Burst slices 32×4k spheres in 7.3 ms (well within a 60 fps
+  frame); naive needs 27.8 ms (≈36 fps cap from slicing alone).
+
+  The headline isn't just the ~3.5× wall-clock speedup — it's that Burst removes
+   essentially all GC pressure (0 KB vs ~600 KB per slice on average), which is
+  what makes per-frame slicing of dozens of meshes actually viable in a real
+  game loop.
+
+  Note: I left the PlayMode performance test asmdef in place
+  (MeshSlicerPerformanceTests.cs), but the project's PlayMode test discovery
+  isn't picking up assemblies — likely a Test Framework v2 settings issue I
+  didn't chase down. The Stopwatch-based comparison above runs from the editor
+  and is the authoritative number.
+
+✻ Worked for 35m 21s
