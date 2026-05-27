@@ -25,27 +25,29 @@ public class Sliceable : MonoBehaviour
         Mesh sourceMesh = mf.sharedMesh;
         if (sourceMesh == null) return;
 
-        // Convert world plane to local space
-        float3 localNormal = transform.InverseTransformDirection(worldPlane.Normal);
-        float3 localPoint = transform.InverseTransformPoint((float3)worldPlane.Normal * -worldPlane.Distance);
+        // Convert world plane to the local space of the MeshFilter's GameObject
+        Transform meshTransform = mf.transform;
+        float3 localNormal = meshTransform.InverseTransformDirection(worldPlane.Normal);
+        float3 localPoint = meshTransform.InverseTransformPoint((float3)worldPlane.Normal * -worldPlane.Distance);
         var localPlane = Plane.CreateFromUnitNormalAndPointInPlane(localNormal, localPoint);
 
         var result = BurstMeshSlicer.Slice(sourceMesh, localPlane);
 
         if (result.Positive != null && result.Negative != null)
         {
-            CreateHalf(result.Positive, "Positive", worldPlane.Normal);
-            CreateHalf(result.Negative, "Negative", -worldPlane.Normal);
+            CreateHalf(result.Positive, "Positive", worldPlane.Normal, meshTransform);
+            CreateHalf(result.Negative, "Negative", -worldPlane.Normal, meshTransform);
             Destroy(gameObject);
         }
     }
 
-    private void CreateHalf(Mesh mesh, string name, float3 pushDir)
+    private void CreateHalf(Mesh mesh, string name, float3 pushDir, Transform originalMeshTransform)
     {
         GameObject go = new GameObject(gameObject.name + "_" + name);
-        go.transform.position = transform.position;
-        go.transform.rotation = transform.rotation;
-        go.transform.localScale = transform.localScale;
+        // Position the new object at the world position of the original mesh node
+        go.transform.position = originalMeshTransform.position;
+        go.transform.rotation = originalMeshTransform.rotation;
+        go.transform.localScale = originalMeshTransform.lossyScale;
 
         var mf = go.AddComponent<MeshFilter>();
         mf.sharedMesh = mesh;

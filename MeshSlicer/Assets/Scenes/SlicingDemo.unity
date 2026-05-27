@@ -404,10 +404,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ObjectSpawner
   prefabs:
-  - {fileID: 6024487838297361940, guid: 843b8b5b8af16425087b9f9c53237518, type: 3}
-  - {fileID: 8588497799813567373, guid: 66b2d1ecd4e304e7a803b6e6ff37283d, type: 3}
-  - {fileID: 3437751830270703824, guid: 0f3b21a7033b2493891fcbf83d6cb326, type: 3}
-  - {fileID: 5004833191192659223, guid: 9aa02533bcc9c4c6daf4d660e13bd184, type: 3}
+  - {fileID: 7767101171935894714, guid: fe30f81da05d7440dbe618c1da1db1ad, type: 3}
+  - {fileID: 8751856558197397272, guid: f6f557155855a483ba6411ffae9f33e6, type: 3}
+  - {fileID: 244752242663667584, guid: 849ebb7454dde47abbc7dc4f7db61ec0, type: 3}
+  - {fileID: 6721450561110512603, guid: 4de8a2a46bf0640bbb0825a563543f24, type: 3}
+  - {fileID: 8164002830941530731, guid: e272947a8387540aea297db21ff6fbd7, type: 3}
   spawnInterval: 2
   spawnRangeX: 2
   spawnHeight: 3

@@ -39,8 +39,9 @@ public class ObjectSpawner : MonoBehaviour
         var mf = go.GetComponentInChildren<MeshFilter>();
         if (mf != null)
         {
-            var mc = go.GetComponent<MeshCollider>();
-            if (mc == null) mc = go.AddComponent<MeshCollider>();
+            // Add collider to the same object as the MeshFilter for correct alignment
+            var mc = mf.gameObject.GetComponent<MeshCollider>();
+            if (mc == null) mc = mf.gameObject.AddComponent<MeshCollider>();
             mc.sharedMesh = mf.sharedMesh;
             mc.convex = true;
         }
